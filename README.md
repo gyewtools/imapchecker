@@ -9,3 +9,4 @@ Usage : py main.py
 
 proxies not implemented yet you can leave it empty 
 should include hotmail if imap enabled (most combo providers enable it for u)
+wait for it to finish adding flush rn
