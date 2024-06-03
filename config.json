@@ -8,5 +8,6 @@
   "retries": 3,
   "retry_delay": 1,
   "autodelete": true,
-  "summary": true
+  "summary": true,
+  "webhook_url": "WEBHOOK FOR DISCORD SUPPORT, SENDS AN EMBED WHEN DONE CHECKING LEAVE BLANK TO DISABLE"
 }
