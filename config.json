@@ -1,0 +1,12 @@
+{
+  "threads": 100,
+  "cui": true,
+  "combo_file": "data/combo.txt",
+  "imap_file": "prov/prov.txt",
+  "valid_file": "valid/validmail.txt",
+  "log_level": "info",
+  "retries": 3,
+  "retry_delay": 1,
+  "autodelete": true,
+  "summary": true
+}
