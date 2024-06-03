@@ -137,11 +137,7 @@ def send_webhook_notification(url, valid_count, invalid_count, error_count, vali
         "embeds": [embed]
     }
 
-    files = {
-        "file": ("validmail.txt", open(valid_file, "rb"))
-    }
-
-    response = requests.post(url, headers=headers, json=data, files=files)
+    response = requests.post(url, headers=headers, json=data)
     if response.status_code == 204:
         print("Webhook sent successfully.")
     else:
