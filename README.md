@@ -1,4 +1,5 @@
 # imapchecker
+# imap checker is a email combo checker that supports 700+ domains with auto detect settings and very customizable
 700+ domains, hotmail blah blah all em good ones discord.gg/silentgen for account generator and drops
 requirements 
 imaplib
