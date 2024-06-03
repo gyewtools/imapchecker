@@ -1,0 +1,14 @@
+threads - how many to do at once, the more the faster recommended 100
+cui - not a log based ui but somthing like [Valid : 5] [Invalid : 2] if set to false the regular gui is used 
+log_level - display errors or not
+retries - retries connecting to imap if denied
+retry_delay - recommended 0 delay between retries
+autodelete - auto deletes bad lines that program cant read causing crashes (HEAVILY RECOMMENED)
+summary - provides a summary at the end of all events
+webhook_url - sends a webhook with the summary
+graph - makes a graph image displaying all the differnt domains in a graph 
+cleanvalidfile - clears the valid file on each use
+use_proxies - not really needed but if u want to go ahead
+deep_detection - upon your domain not being in prov.txt it will try to find the right imap settings for that domain
+detection combinations - 1-5 deep detection needs to be true, how many detection patterns it will try before giving up
+
