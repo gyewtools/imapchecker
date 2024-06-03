@@ -9,5 +9,18 @@
   "retry_delay": 1,
   "autodelete": true,
   "summary": true,
-  "webhook_url": "WEBHOOK FOR DISCORD SUPPORT, SENDS AN EMBED WHEN DONE CHECKING LEAVE BLANK TO DISABLE"
+  "webhook_url": "discord webhook",
+  "graph": {
+    "enabled": true,
+    "output_path": "results/image.png",
+    "title": "Combo Graph",
+    "xlabel": "Number of Emails",
+    "ylabel": "Email Domains",
+    "delete_existing_image": false
+  },
+  "clean_valid_file": true,
+  "proxy_file": "data/proxies.txt",
+  "use_proxies": true,
+  "deep_detection": true,
+  "detection_combinations": 5
 }
